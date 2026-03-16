@@ -1,19 +1,27 @@
-$filePath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Errors.txt"
+# Definē ceļu uz failu lietotāja Documents mapē
+$filePath = "$HOME\Documents\Errors.txt"
 
-$sevenDaysAgo = (Get-Date).AddDays(-7)
-$errors = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=$sevenDaysAgo} -ErrorAction SilentlyContinue
+# Iegūst kļūdas no System žurnāla par pēdējām 7 dienām
+$startDate = (Get-Date).AddDays(-7)
+$errors = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=$startDate} -ErrorAction SilentlyContinue
 
+# Sagatavo virsraksta ziņojumu atkarībā no kļūdu skaita
 if ($errors.Count -gt 10) {
-    $header = "[KRITISKI] Sistema ir nestabila!"
+    $header = "[CRITICAL] System is unstable!"
 } else {
-    $header = "[OK] Kludu limenis normals."
+    $header = "[OK] Error level is normal."
 }
 
-$content = @($header)
+# Izveido faila saturu: vispirms virsraksts, tad kļūdu saraksts (laiks un ziņojums)
+$report = New-Object System.Collections.Generic.List[string]
+$report.Add($header)
+$report.Add("-" * 30)
+
 foreach ($err in $errors) {
-    $content += "$($err.TimeCreated) - $($err.Message)"
+    $report.Add("$($err.TimeCreated) - $($err.Message)")
 }
 
-$content | Out-File -FilePath $filePath -Encoding utf8
+# Saglabā visu informāciju failā Errors.txt
+$report | Out-File -FilePath $filePath -Encoding utf8
 
-Write-Host "Atskaite saglabāta: $filePath"
+Write-Host "Analīze pabeigta. Rezultāti saglabāti: $filePath"
