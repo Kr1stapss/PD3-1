@@ -1,12 +1,19 @@
-$errors = Get-WinEvent -LogName System | Where-Object {$_.LevelDisplayName -eq "Error" -and $_.TimeCreated -gt (Get-Date).AddDays(-7)}
+$filePath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Errors.txt"
 
-$file = "$env:USERPROFILE\Documents\Errors.txt"
+$sevenDaysAgo = (Get-Date).AddDays(-7)
+$errors = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=$sevenDaysAgo} -ErrorAction SilentlyContinue
 
-if($errors.Count -gt 10){
-"[KRITISKI] Sistēma ir nestabila!" | Out-File $file
+if ($errors.Count -gt 10) {
+    $header = "[KRITISKI] Sistema ir nestabila!"
+} else {
+    $header = "[OK] Kludu limenis normals."
 }
-else{
-"[OK] Kļūdu līmenis normāls." | Out-File $file
+
+$content = @($header)
+foreach ($err in $errors) {
+    $content += "$($err.TimeCreated) - $($err.Message)"
 }
 
-$errors | Select TimeCreated, Message | Out-File $file -Append
+$content | Out-File -FilePath $filePath -Encoding utf8
+
+Write-Host "Atskaite saglabāta: $filePath"
