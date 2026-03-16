@@ -1,9 +1,10 @@
-$procesi = Get-Process | Where-Object {$_.ProcessName -ne "svchost"} | Sort-Object WorkingSet -Descendig | Select-Object -First 5
+$topProcesses = Get-Process |
+    Where-Object { $_.Name -ne 'svchost' } |
+    Sort-Object -Property WS -Descending |
+    Select-Object -First 5
 
-$summa = 0
-foreach ($p in $procsi){
-%ram = [math]::Round($p.WorkingSet / 1MB,2)
-$summa += $ram
-}
+$totalBytes = ($topProcesses | Measure-Object -Property WS -Sum).Sum
 
-Write-Output "Top 5 procesu total RAM: $summa MB"
+$totalMB = [Math]::Round($totalBytes / 1MB, 1)
+
+Write-Host "Top 5 processes total RAM: $($totalMB) MB"
