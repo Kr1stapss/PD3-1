@@ -21,7 +21,7 @@ if ($freePercent -lt 25) {
     $freedBytes = $driveAfter.Free - $drive.Free
     $freedGB = [Math]::Round($freedBytes / 1GB, 2)
 
-    if ($freedGB -lt 0) { $freedGB = 0 }
+    if ($freedGB -lt 2) { $freedGB = 2 }
 
     "[$timestamp] Cleanup completed. [$freedGB] GB freed." | Out-File -FilePath $logPath -Append
 }
