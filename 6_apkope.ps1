@@ -1,34 +1,37 @@
-# Definē ceļu uz žurnālfailu lietotāja Documents mapē
+# 1. Ceļš uz log failu
 $logPath = Join-Path $home "Documents\Maintenance.log"
+$timestamp = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
 
-# Iegūst informāciju par C: disku
-$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
-$freePercent = ($disk.FreeSpace / $disk.Size) * 100
+# 2. Iegūst diskus drošā veidā
+$disk = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
 
-# Pašreizējais laiks formātā
-$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-
-if ($freePercent -lt 25) {
-    # Nomēra aizņemto vietu pirms tīrīšanas
-    $sizeBefore = (Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+# Pārbaude: vai disks eksistē un vai tā izmērs nav 0
+if ($null -ne $disk -and $disk.Size -gt 0) {
     
-    # 1. Iztīra TEMP mapi
-    Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $freePercent = ($disk.SizeRemaining / $disk.Size) * 100
     
-    # 2. Iztīra Atkritni (Recycle Bin)
-    Clear-RecycleBin -DriveLetter C -Confirm:$false -ErrorAction SilentlyContinue
-    
-    # Nomēra aizņemto vietu pēc tīrīšanas (tiek pieņemts, ka starpība ir atbrīvotā vieta)
-    # Tā kā Recycle Bin izmēru grūti precīzi nomērīt pirms dzēšanas ar standarta komandām, 
-    # aprēķināsim pēc diska brīvās vietas izmaiņām:
-    $diskAfter = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
-    $freedBytes = $diskAfter.FreeSpace - $disk.FreeSpace
-    $freedGB = [Math]::Round($freedBytes / 1GB, 2)
+    if ($freePercent -lt 25) {
+        # Saglabājam brīvo vietu pirms tīrīšanas
+        $bytesBefore = $disk.SizeRemaining
 
-    $logMessage = "[$timestamp] Cleanup completed. $freedGB GB freed."
+        # Tīrīšana (TEMP un Recycle Bin)
+        Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Clear-RecycleBin -DriveLetter C -Confirm:$false -ErrorAction SilentlyContinue
+
+        # Pārmērām vietu pēc tīrīšanas
+        $diskAfter = Get-Volume -DriveLetter C
+        $bytesAfter = $diskAfter.SizeRemaining
+        
+        $freedBytes = $bytesAfter - $bytesBefore
+        $freedGB = [Math]::Round($freedBytes / 1GB, 2)
+
+        $logMessage = "[$timestamp] Cleanup completed. $freedGB GB freed."
+    } else {
+        $logMessage = "[$timestamp] Space sufficient."
+    }
 } else {
-    $logMessage = "[$timestamp] Space sufficient."
+    $logMessage = "[$timestamp] Error: Could not read C: drive info."
 }
 
-# Ieraksta rezultātu log failā
+# Ieraksta log failā
 Add-Content -Path $logPath -Value $logMessage
