@@ -1,31 +1,34 @@
-# Definē ceļu uz žurnālfailu (log file)
-$logPath = "$home\Documents\Apkope.log"
-$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+# Definē ceļu uz žurnālfailu lietotāja Documents mapē
+$logPath = Join-Path $home "Documents\Maintenance.log"
 
 # Iegūst informāciju par C: disku
-$drive = Get-PSDrive C
-$totalSpace = $drive.Used + $drive.Free
-$freePercent = ($drive.Free / $totalSpace) * 100
+$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
+$freePercent = ($disk.FreeSpace / $disk.Size) * 100
+
+# Pašreizējais laiks formātā
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
 if ($freePercent -lt 25) {
-    # Nomēra aizņemto vietu pirms tīrīšanas (TEMP un Recycle Bin)
+    # Nomēra aizņemto vietu pirms tīrīšanas
     $sizeBefore = (Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
-    # Piezīme: Recycle Bin precīza izmēra noteikšana caur PS ir ierobežota, tāpēc fokusējamies uz TEMP mapi
-
-    # Veic tīrīšanu
-    Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Clear-RecycleBin -Confirm:$false -ErrorAction SilentlyContinue
-
-    # Aprēķina atbrīvoto vietu (salīdzinot diska brīvo vietu pēc procesa)
-    $driveAfter = Get-PSDrive C
-    $freedBytes = $driveAfter.Free - $drive.Free
+    
+    # 1. Iztīra TEMP mapi
+    Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # 2. Iztīra Atkritni (Recycle Bin)
+    Clear-RecycleBin -DriveLetter C -Confirm:$false -ErrorAction SilentlyContinue
+    
+    # Nomēra aizņemto vietu pēc tīrīšanas (tiek pieņemts, ka starpība ir atbrīvotā vieta)
+    # Tā kā Recycle Bin izmēru grūti precīzi nomērīt pirms dzēšanas ar standarta komandām, 
+    # aprēķināsim pēc diska brīvās vietas izmaiņām:
+    $diskAfter = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
+    $freedBytes = $diskAfter.FreeSpace - $disk.FreeSpace
     $freedGB = [Math]::Round($freedBytes / 1GB, 2)
 
-    if ($freedGB -lt 2) { $freedGB = 2 }
-
-    "[$timestamp] Cleanup completed. [$freedGB] GB freed." | Out-File -FilePath $logPath -Append
-}
-else {
-    "[$timestamp] Enough space." | Out-File -FilePath $logPath -Append
+    $logMessage = "[$timestamp] Cleanup completed. $freedGB GB freed."
+} else {
+    $logMessage = "[$timestamp] Space sufficient."
 }
 
+# Ieraksta rezultātu log failā
+Add-Content -Path $logPath -Value $logMessage
